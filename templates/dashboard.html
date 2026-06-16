@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Munters Production Planning Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+<div class="app-container">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">M</div>
+      <div><h2>MUNTERS</h2><p class="subtitle">Production Planning</p></div>
+    </div>
+    <ul class="nav-links">
+      <li class="active" data-section="overview"><span class="nav-icon">📊</span> Overview</li>
+      <li data-section="classification"><span class="nav-icon">🏷️</span> Classification</li>
+      <li data-section="schedule"><span class="nav-icon">🗓️</span> Schedule</li>
+      <li data-section="gantt"><span class="nav-icon">📈</span> Gantt Chart</li>
+      <li data-section="ml"><span class="nav-icon">🤖</span> ML Models</li>
+      <li data-section="simulation"><span class="nav-icon">📦</span> Simulation</li>
+    </ul>
+    <div class="sidebar-footer"><p>Shift: 450 min | 90% Util</p><p id="current-time"></p></div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <header class="top-bar">
+      <h1 id="page-title">Production Overview</h1>
+      <div class="header-actions">
+        <button id="btn-reschedule" class="action-btn" style="background: linear-gradient(135deg, var(--accent), var(--purple)); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; gap: 8px;">🔄 Redistribute Remaining</button>
+        <span class="badge" id="shift-badge">SHIFT ACTIVE</span>
+        <span class="timestamp" id="header-time"></span>
+      </div>
+    </header>
+
+    <!-- SECTION: Overview -->
+    <section id="section-overview" class="section active">
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div class="chart-row">
+        <div class="chart-card" id="chart-panel-split"></div>
+        <div class="chart-card" id="chart-area-dist"></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" id="chart-machine-util"></div>
+        <div class="chart-card" id="chart-class-counts"></div>
+      </div>
+    </section>
+
+    <!-- SECTION: Classification -->
+    <section id="section-classification" class="section">
+      <div class="card"><h3>📋 Class Distribution Table</h3><div id="class-table-container"></div></div>
+    </section>
+
+    <!-- SECTION: Schedule -->
+    <section id="section-schedule" class="section">
+      <div id="schedule-container"></div>
+    </section>
+
+    <!-- SECTION: Gantt -->
+    <section id="section-gantt" class="section">
+      <div class="card gantt-card">
+        <div class="gantt-card-header">
+          <h3>📈 Production Gantt Chart</h3>
+          <div class="gantt-header-actions">
+            <span class="gantt-stat" id="gantt-stat-panels"></span>
+            <span class="gantt-stat" id="gantt-stat-classes"></span>
+          </div>
+        </div>
+        <div id="gantt-chart-custom"></div>
+      </div>
+      <div class="card gantt-controls-card">
+        <div class="gantt-controls-header">
+          <h3>📋 Class Actions</h3>
+          <p class="gantt-controls-subtitle">Mark classes done or download Excel per class</p>
+        </div>
+        <div id="gantt-class-controls"></div>
+      </div>
+    </section>
+
+    <!-- SECTION: ML -->
+    <section id="section-ml" class="section">
+      <div class="card"><h3>🤖 Model Comparison</h3><div id="ml-comparison"></div></div>
+      <div class="chart-row">
+        <div class="chart-card" id="ml-r2-chart"></div>
+        <div class="chart-card" id="ml-error-chart"></div>
+      </div>
+    </section>
+
+    <!-- SECTION: Simulation -->
+    <section id="section-simulation" class="section">
+      <div class="card"><h3>📦 Visual Box Simulation — Panel Size Classes</h3><p class="sim-desc">Rectangle size proportional to panel area range</p><div id="box-simulation"></div></div>
+    </section>
+  </main>
+</div>
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>
