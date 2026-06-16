@@ -24,7 +24,7 @@
       <li data-section="ml"><span class="nav-icon">🤖</span> ML Models</li>
       <li data-section="simulation"><span class="nav-icon">📦</span> Simulation</li>
     </ul>
-    <div class="sidebar-footer"><p>Shift: 450 min | 90% Util</p><p id="current-time"></p></div>
+    <div class="sidebar-footer"><p>Shift: 10:00 - 17:30</p><p id="current-time"></p></div>
   </nav>
 
   <!-- Main Content -->
@@ -35,6 +35,7 @@
         <input type="file" id="file-upload" accept=".xlsx, .xls" style="display: none;" />
         <button id="btn-upload" class="action-btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; gap: 8px;">📤 Upload Excel</button>
         <button id="btn-reschedule" class="action-btn" style="background: linear-gradient(135deg, var(--accent), var(--purple)); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; gap: 8px;">🔄 Redistribute Remaining</button>
+        <button id="btn-end-shift" class="action-btn" style="background: linear-gradient(135deg, var(--red), #991b1b); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; gap: 8px;">🛑 End Shift</button>
         <span class="badge" id="shift-badge">SHIFT ACTIVE</span>
         <span class="timestamp" id="header-time"></span>
       </div>

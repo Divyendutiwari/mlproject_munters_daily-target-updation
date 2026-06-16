@@ -90,6 +90,7 @@ def initialize_system(data_path=None):
     APP_DATA["thermal_timing"] = thermal_timing
     APP_DATA["non_thermal_timing"] = non_thermal_timing
     APP_DATA["class_timing"] = get_class_timing_map(df)
+    APP_DATA["shift_active"] = True
     
     print("\n" + "="*60)
     print("  [OK] SYSTEM INITIALIZED SUCCESSFULLY")
@@ -103,6 +104,67 @@ def initialize_system(data_path=None):
 @app.route("/")
 def dashboard():
     return render_template("dashboard.html")
+
+
+@app.route("/api/shift_status")
+def api_shift_status():
+    return jsonify({
+        "shift_active": APP_DATA.get("shift_active", False)
+    })
+
+
+@app.route("/api/end_shift", methods=["POST"])
+def api_end_shift():
+    APP_DATA["shift_active"] = False
+    
+    df = APP_DATA["df"]
+    schedule = APP_DATA["schedule"]
+    
+    # Build panel → machine map
+    panel_machine_map = {}
+    for machine, data in schedule.items():
+        for entry in data["schedule"]:
+            if entry["type"] == "production":
+                panel_machine_map[entry["panel_id"]] = machine
+    
+    # All scheduled panel IDs
+    scheduled_ids = set(panel_machine_map.keys())
+    
+    # Backlog: NOT completed panels
+    backlog_df = df[df["Status"] != "Completed"].copy()
+    backlog_df["Scheduled_Machine"] = backlog_df["Panel_ID"].apply(
+        lambda pid: panel_machine_map.get(pid, "Unscheduled"))
+    backlog_df["Backlog_Type"] = backlog_df["Panel_ID"].apply(
+        lambda pid: "Scheduled_Undone" if pid in scheduled_ids else "Unscheduled")
+    
+    # Store backlog for next-day merging
+    APP_DATA["backlog"] = backlog_df.copy()
+    
+    # Generate styled Excel
+    from openpyxl.styles import PatternFill
+    export_cols = ["FG_Design_Code", "Panel_Type", "Production_Class",
+                   "Length_mm", "Breadth_mm", "Area_mm2",
+                   "Scheduled_Machine", "Backlog_Type"]
+    existing = [c for c in export_cols if c in backlog_df.columns]
+    export_df = backlog_df[existing].reset_index(drop=True)
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        export_df.to_excel(writer, index=False, sheet_name="Backlog")
+        ws = writer.sheets["Backlog"]
+        red_fill = PatternFill(start_color="FF9999", end_color="FF9999", fill_type="solid")
+        yellow_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
+        bt_col = list(export_df.columns).index("Backlog_Type") + 2  # +2 for 1-index + header
+        for row_idx in range(2, len(export_df) + 2):
+            bt_val = ws.cell(row=row_idx, column=bt_col - 1 + 1).value
+            fill = red_fill if bt_val == "Scheduled_Undone" else yellow_fill
+            for col_idx in range(1, len(existing) + 1):
+                ws.cell(row=row_idx, column=col_idx).fill = fill
+    output.seek(0)
+    
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    return send_file(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                     as_attachment=True, download_name=f"Backlog_{date_str}.xlsx")
 
 
 @app.route("/api/kpis")
@@ -119,8 +181,8 @@ def api_kpis():
         "total_classes": int(df["Production_Class"].nunique()),
         "total_scheduled": ss["total_panels_scheduled"],
         "total_tool_changes": ss["total_tool_changes"],
-        "avg_utilization": ss["avg_utilization_pct"],
-        "total_idle_min": ss["total_idle_minutes"],
+        "completed_panels": int((df["Status"] == "Completed").sum()),
+        "pending_panels": int((df["Status"] == "Pending").sum()),
         "best_model": best_model,
         "best_r2": round(ml[best_model]["r2"] * 100, 2),
         "best_mae": round(ml[best_model]["mae"], 2),
@@ -148,10 +210,21 @@ def api_class_distribution():
 @app.route("/api/schedule")
 def api_schedule():
     schedule = APP_DATA["schedule"]
+    df = APP_DATA["df"]
     result = {}
     for machine, data in schedule.items():
+        annotated_schedule = []
+        for entry in data["schedule"]:
+            entry_copy = entry.copy()
+            if entry["type"] == "production":
+                match = df.loc[df["Panel_ID"] == entry["panel_id"], "Status"]
+                entry_copy["status"] = match.iloc[0] if len(match) > 0 else "Pending"
+            else:
+                entry_copy["status"] = "Pending"
+            annotated_schedule.append(entry_copy)
+            
         result[machine] = {
-            "schedule": data["schedule"],
+            "schedule": annotated_schedule,
             "stats": {
                 "total_time_used": data["total_time_used"],
                 "production_time": data["production_time"],
@@ -348,16 +421,21 @@ def api_mark_completed():
         APP_DATA["df"] = df
         return jsonify({"success": True, "message": f"Panel {panel_id} marked completed"})
     return jsonify({"success": False, "message": "Missing panel_id"}), 400
-
-
 @app.route("/api/reschedule", methods=["POST"])
 def api_reschedule():
     df = APP_DATA["df"]
     pending_df = df[df["Status"] == "Pending"].copy()
     if pending_df.empty:
         return jsonify({"success": False, "message": "No pending panels to reschedule"}), 400
-    print(f"\n[LIVE] Rescheduling {len(pending_df)} pending panels...")
-    schedule_results = create_schedule(pending_df)
+    
+    # Calculate real-time offset from shift start (10:00 AM)
+    now = datetime.now()
+    shift_start = now.replace(hour=10, minute=0, second=0, microsecond=0)
+    elapsed_min = max(0, (now - shift_start).total_seconds() / 60)
+    elapsed_min = min(elapsed_min, config.EFFECTIVE_CAPACITY_MINUTES)
+    
+    print(f"\n[LIVE] Rescheduling {len(pending_df)} pending panels from {elapsed_min:.0f} min offset...")
+    schedule_results = create_schedule(pending_df, start_offset_min=elapsed_min)
     schedule_summary = get_schedule_summary(schedule_results)
     APP_DATA["schedule"] = schedule_results
     APP_DATA["schedule_summary"] = schedule_summary
@@ -367,6 +445,9 @@ def api_reschedule():
 
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
+    if APP_DATA.get("shift_active", False):
+        return jsonify({"success": False, "message": "Cannot upload during active shift. End shift first."}), 400
+    
     if "file" not in request.files:
         return jsonify({"success": False, "message": "No file part in the request"}), 400
     
@@ -374,22 +455,136 @@ def api_upload():
     if file.filename == "":
         return jsonify({"success": False, "message": "No file selected"}), 400
         
-    if file and (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
-        from werkzeug.utils import secure_filename
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(config.UPLOAD_FOLDER, filename)
-        
-        try:
-            file.save(filepath)
-            print(f"\n[UPLOAD] New data file uploaded: {filepath}")
-            # Reinitialize the system with the new data
-            initialize_system(data_path=filepath)
-            return jsonify({"success": True, "message": "File uploaded and system successfully re-initialized."})
-        except Exception as e:
-            print(f"[UPLOAD ERROR] {str(e)}")
-            return jsonify({"success": False, "message": f"Error processing file: {str(e)}"}), 500
-    else:
+    if not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
         return jsonify({"success": False, "message": "Invalid file format. Please upload an Excel file (.xlsx)"}), 400
+    
+    from werkzeug.utils import secure_filename
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(config.UPLOAD_FOLDER, filename)
+    
+    try:
+        file.save(filepath)
+        print(f"\n[UPLOAD] New data file uploaded: {filepath}")
+        
+        # Check if there's a backlog from previous shift to merge
+        prev_backlog = APP_DATA.get("backlog", None)
+        
+        # Initialize system with new data
+        initialize_system(data_path=filepath)
+        
+        next_day_plan_path = None
+        
+        if prev_backlog is not None and len(prev_backlog) > 0:
+            print(f"[UPLOAD] Merging {len(prev_backlog)} backlog panels with new data...")
+            
+            # Get the raw columns needed from backlog
+            backlog_raw_cols = ["FG_Design_Code", "Panel_Type", "Length_mm", "Breadth_mm", "Area_mm2"]
+            existing_cols = [c for c in backlog_raw_cols if c in prev_backlog.columns]
+            backlog_for_merge = prev_backlog[existing_cols].copy()
+            backlog_for_merge["_Source"] = prev_backlog["Backlog_Type"].values  # Scheduled_Undone or Unscheduled
+            
+            # Get fresh data
+            new_df = APP_DATA["df"].copy()
+            new_count = len(new_df)
+            new_df["_Source"] = "New"
+            
+            # Combine backlog + new data
+            combined_raw = pd.concat([backlog_for_merge, new_df[existing_cols + ["_Source"]]], ignore_index=True)
+            
+            # Re-run full pipeline on combined data
+            from classifier import classify_panels, assign_production_time
+            combined_raw.dropna(subset=["Length_mm", "Breadth_mm", "Area_mm2", "Panel_Type"], inplace=True)
+            combined_raw.reset_index(drop=True, inplace=True)
+            combined_raw["Panel_ID"] = "PID-" + combined_raw.index.astype(str)
+            combined_df = enrich_dataset(combined_raw.copy())
+            combined_df, area_bounds, length_bounds = classify_panels(combined_df)
+            thermal_timing = APP_DATA["thermal_timing"]
+            non_thermal_timing = APP_DATA["non_thermal_timing"]
+            combined_df = assign_production_time(combined_df, thermal_timing, non_thermal_timing)
+            combined_df["Status"] = "Pending"
+            
+            # Store the source info before overwriting
+            sources = combined_raw["_Source"].values
+            
+            # Schedule the combined dataset
+            schedule_results = create_schedule(combined_df)
+            schedule_summary = get_schedule_summary(schedule_results)
+            
+            # Build scheduled panel IDs set
+            scheduled_ids = set()
+            for machine, data in schedule_results.items():
+                for entry in data["schedule"]:
+                    if entry["type"] == "production":
+                        scheduled_ids.add(entry["panel_id"])
+            
+            combined_df["Scheduled_Today"] = combined_df["Panel_ID"].apply(
+                lambda pid: "✓" if pid in scheduled_ids else "✗")
+            combined_df["_Source"] = sources[:len(combined_df)]
+            
+            # Update APP_DATA
+            APP_DATA["df"] = combined_df
+            APP_DATA["area_bounds"] = area_bounds
+            APP_DATA["length_bounds"] = length_bounds
+            APP_DATA["schedule"] = schedule_results
+            APP_DATA["schedule_summary"] = schedule_summary
+            APP_DATA["class_timing"] = get_class_timing_map(combined_df)
+            save_panels(combined_df)
+            save_schedule(schedule_results)
+            
+            # Generate styled Next_Day_Plan.xlsx
+            from openpyxl.styles import PatternFill
+            plan_cols = ["FG_Design_Code", "Panel_Type", "Production_Class",
+                         "Length_mm", "Breadth_mm", "Area_mm2", "Scheduled_Today", "_Source"]
+            plan_existing = [c for c in plan_cols if c in combined_df.columns]
+            plan_df = combined_df[plan_existing].copy()
+            plan_df.rename(columns={"_Source": "Origin"}, inplace=True)
+            
+            plan_output = io.BytesIO()
+            with pd.ExcelWriter(plan_output, engine="openpyxl") as writer:
+                plan_df.to_excel(writer, index=False, sheet_name="Next_Day_Plan")
+                ws = writer.sheets["Next_Day_Plan"]
+                red_fill = PatternFill(start_color="FF9999", end_color="FF9999", fill_type="solid")
+                yellow_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
+                origin_col_idx = list(plan_df.columns).index("Origin") + 1
+                for row_idx in range(2, len(plan_df) + 2):
+                    origin_val = ws.cell(row=row_idx, column=origin_col_idx).value
+                    fill = None
+                    if origin_val == "Scheduled_Undone":
+                        fill = red_fill
+                    elif origin_val == "Unscheduled":
+                        fill = yellow_fill
+                    if fill:
+                        for col_idx in range(1, len(plan_df.columns) + 1):
+                            ws.cell(row=row_idx, column=col_idx).fill = fill
+            plan_output.seek(0)
+            
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            plan_path = os.path.join(config.UPLOAD_FOLDER, f"Next_Day_Plan_{date_str}.xlsx")
+            with open(plan_path, "wb") as f:
+                f.write(plan_output.read())
+            
+            print(f"[UPLOAD] Next Day Plan saved: {plan_path} ({len(combined_df)} total panels)")
+            return jsonify({
+                "success": True,
+                "message": f"Merged {len(prev_backlog)} backlog + {new_count} new = {len(combined_df)} total panels. System re-initialized.",
+                "has_plan": True,
+            })
+        
+        return jsonify({"success": True, "message": "File uploaded and system successfully re-initialized.", "has_plan": False})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[UPLOAD ERROR] {str(e)}")
+        return jsonify({"success": False, "message": f"Error processing file: {str(e)}"}), 500
+
+
+@app.route("/api/download_next_day_plan")
+def api_download_next_day_plan():
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    plan_path = os.path.join(config.UPLOAD_FOLDER, f"Next_Day_Plan_{date_str}.xlsx")
+    if os.path.exists(plan_path):
+        return send_file(plan_path, as_attachment=True, download_name=f"Next_Day_Plan_{date_str}.xlsx")
+    return jsonify({"success": False, "message": "Next day plan not found"}), 404
 
 
 if __name__ == "__main__":

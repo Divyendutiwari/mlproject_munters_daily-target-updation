@@ -104,7 +104,7 @@ function hideGanttTooltip() {
 }
 
 function minutesToTime(min) {
-  const h = Math.floor(min / 60) + 8; // shift starts at 08:00
+  const h = Math.floor(min / 60) + 10; // shift starts at 10:00
   const m = Math.round(min % 60);
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
@@ -266,6 +266,8 @@ async function markClassDone(className, btn) {
 
       // Refresh Gantt to update bar statuses
       await loadGantt();
+      // Refresh Schedule
+      await loadSchedule();
     } else {
       btn.innerHTML = '✗ Failed';
       btn.classList.remove('loading');
@@ -305,6 +307,8 @@ window.markCompleted = async function(panelId, btn) {
   if (data.success) {
     btn.innerHTML = '✓ Done';
     btn.classList.add('completed');
+    await loadGantt();
+    await loadSchedule();
   } else {
     btn.innerText = 'Failed';
   }
@@ -354,8 +358,8 @@ async function loadKPIs(){
     {icon:'❄️',value:d.non_thermal_panels,label:'Non-Thermal'},
     {icon:'🏷️',value:d.total_classes,label:'Classes'},
     {icon:'✅',value:d.total_scheduled,label:'Scheduled'},
-    {icon:'🔧',value:d.total_tool_changes,label:'Tool Changes'},
-    {icon:'⚡',value:d.avg_utilization+'%',label:'Avg Utilization'},
+    {icon:'✔️',value:d.completed_panels,label:'Completed'},
+    {icon:'⏳',value:d.pending_panels,label:'Pending'},
     {icon:'🤖',value:d.best_r2+'%',label:'ML R² ('+d.best_model+')'},
   ];
   const g=document.getElementById('kpi-grid');
@@ -415,8 +419,10 @@ async function loadSchedule(){
     html+=`<div class="machine-schedule"><div class="machine-header"><div class="machine-name"><span class="dot"></span>${machine}</div><div class="stat-pills"><span class="stat-pill production">⚡ ${info.stats.panels_produced} panels</span><span class="stat-pill production">📊 ${info.stats.utilization_pct}%</span><span class="stat-pill tool-change">🔧 ${info.stats.tool_changes} changes</span><span class="stat-pill idle">💤 ${info.stats.idle_time.toFixed(0)} min idle</span></div></div><div class="schedule-timeline">`;
     info.schedule.forEach(e=>{
       const isProd = e.type === 'production';
-      const markBtn = isProd ? `<button class="mark-done-btn" onclick="markCompleted('${e.panel_id}', this)">Mark Done</button>` : '';
-      html+=`<div class="timeline-entry ${e.type}"><span class="timeline-time">${e.start_time} → ${e.end_time}</span><span class="timeline-class">${e.type==='tool_change'?'🔧 Tool Change':'🔨 '+e.class}</span><span class="timeline-fg">${e.fg_code}</span><span style="color:#64748b;font-size:11px;margin-right:10px">${e.duration_min.toFixed(1)} min</span>${markBtn}</div>`;
+      const isDone = isProd && e.status === 'Completed';
+      const markBtn = isProd ? `<button class="mark-done-btn ${isDone ? 'completed' : ''}" onclick="markCompleted('${e.panel_id}', this)" ${isDone ? 'disabled' : ''}>${isDone ? '✓ Done' : '☐ Mark Done'}</button>` : '';
+      const rowOpacity = isDone ? 'opacity: 0.5; filter: grayscale(1);' : '';
+      html+=`<div class="timeline-entry ${e.type}" style="${rowOpacity}"><span class="timeline-time">${e.start_time} → ${e.end_time}</span><span class="timeline-class">${e.type==='tool_change'?'🔧 Tool Change':'🔨 '+e.class}</span><span class="timeline-fg">${e.fg_code}</span><span style="color:#64748b;font-size:11px;margin-right:10px">${e.duration_min.toFixed(1)} min</span>${markBtn}</div>`;
     });
     html+='</div></div>';
   }
@@ -500,6 +506,12 @@ document.getElementById('file-upload')?.addEventListener('change', async (e) => 
       await loadGantt();
       await loadML();
       await loadSimulation();
+      await checkShiftStatus();
+      
+      if (data.has_plan) {
+        showToast('📥 Downloading Next Day Plan...', 4000);
+        window.location.href = '/api/download_next_day_plan';
+      }
     } else {
       showToast('❌ Upload failed: ' + data.message);
     }
@@ -514,9 +526,65 @@ document.getElementById('file-upload')?.addEventListener('change', async (e) => 
 });
 
 // ══════════════════════════════════════════════════════════
+// SHIFT STATUS & END SHIFT
+// ══════════════════════════════════════════════════════════
+async function checkShiftStatus() {
+  const data = await api('/api/shift_status');
+  const btnUpload = document.getElementById('btn-upload');
+  const badge = document.getElementById('shift-badge');
+  const btnEnd = document.getElementById('btn-end-shift');
+  if (data.shift_active) {
+    btnUpload.style.opacity = '0.4';
+    btnUpload.style.pointerEvents = 'none';
+    btnUpload.title = "End shift to upload new data";
+    badge.innerText = "SHIFT ACTIVE";
+    badge.style.background = "linear-gradient(135deg, var(--green), #059669)";
+    if(btnEnd) { btnEnd.style.display = 'flex'; }
+  } else {
+    btnUpload.style.opacity = '1';
+    btnUpload.style.pointerEvents = 'auto';
+    btnUpload.title = "";
+    badge.innerText = "SHIFT ENDED";
+    badge.style.background = "linear-gradient(135deg, var(--text-secondary), #475569)";
+    if(btnEnd) { btnEnd.style.display = 'none'; }
+  }
+}
+
+document.getElementById('btn-end-shift')?.addEventListener('click', async () => {
+  if (!confirm("Are you sure you want to end the shift? This will generate the backlog Excel file.")) return;
+  
+  const link = document.createElement('a');
+  showToast("⏳ Ending shift and generating backlog...");
+  const res = await fetch('/api/end_shift', { method: 'POST' });
+  if (res.ok) {
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    link.href = url;
+    
+    const disp = res.headers.get('Content-Disposition');
+    let fname = "Backlog.xlsx";
+    if (disp && disp.includes('filename=')) {
+      fname = disp.split('filename=')[1].replace(/"/g, '');
+    }
+    
+    link.download = fname;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    showToast("✅ Shift Ended. Backlog generated.");
+    await checkShiftStatus();
+  } else {
+    showToast("❌ Failed to end shift.");
+  }
+});
+
+// ══════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════
 (async()=>{
+  await checkShiftStatus();
   await loadKPIs();
   await loadCharts();
   await loadClassTable();

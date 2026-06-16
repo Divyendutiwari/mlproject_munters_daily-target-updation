@@ -34,16 +34,15 @@ DATABASE_PATH = os.path.join(DATA_DIR, "munters_production.db")
 # ─────────────────────────────────────────────────────────────
 # PRODUCTION PARAMETERS
 # ─────────────────────────────────────────────────────────────
-SHIFT_DURATION_MINUTES = 450          # Total shift duration
-UTILIZATION_FACTOR = 0.90             # 90% productive utilization
-EFFECTIVE_CAPACITY_MINUTES = SHIFT_DURATION_MINUTES * UTILIZATION_FACTOR  # 405 min
+SHIFT_DURATION_MINUTES = 450          # Total shift duration (10:00 AM - 5:30 PM)
+EFFECTIVE_CAPACITY_MINUTES = SHIFT_DURATION_MINUTES  # Full 450 min capacity
 TOOL_CHANGE_TIME_MINUTES = 17        # Minutes per tool change
 
 # ─────────────────────────────────────────────────────────────
 # MACHINE CONFIGURATION
 # ─────────────────────────────────────────────────────────────
 MACHINES = ["BM1", "BM2", "BM3"]
-SHIFT_START_TIME = "08:00"
+SHIFT_START_TIME = "10:00"
 
 # ─────────────────────────────────────────────────────────────
 # CLASSIFICATION PARAMETERS

@@ -20,7 +20,18 @@ def load_panel_dataset(file_path=None):
             f"Panel dataset not found at: {path_to_load}\n"
             f"Set the MUNTERS_PANEL_DATA environment variable or upload a file."
         )
-    df = pd.read_excel(path_to_load, sheet_name="Munters_Panel_Dataset")
+    
+    # Be resilient to different sheet names
+    try:
+        xl = pd.ExcelFile(path_to_load)
+        if "Munters_Panel_Dataset" in xl.sheet_names:
+            df = pd.read_excel(path_to_load, sheet_name="Munters_Panel_Dataset")
+        else:
+            # Fallback to the first sheet if specific name is missing
+            df = pd.read_excel(path_to_load, sheet_name=0)
+    except Exception as e:
+        raise ValueError(f"Failed to read panel dataset: {str(e)}")
+        
     df.columns = df.columns.str.strip()
     
     # Ensure correct types
@@ -44,15 +55,29 @@ def load_panel_dataset(file_path=None):
 def load_machine_uptime(file_path=None):
     """Load machine uptime data from Sheet2."""
     path_to_load = file_path if file_path else config.PANEL_DATASET_PATH
-    df = pd.read_excel(path_to_load, sheet_name="Sheet1")
-    df.columns = df.columns.str.strip()
     machines = {}
-    for _, row in df.iterrows():
-        machine = str(row.iloc[0]).strip()
-        uptime_str = str(row.iloc[1]).strip()
-        # Extract numeric value
-        uptime = int(''.join(filter(str.isdigit, uptime_str)))
-        machines[machine] = uptime
+    
+    try:
+        xl = pd.ExcelFile(path_to_load)
+        if "Sheet1" in xl.sheet_names:
+            df = pd.read_excel(path_to_load, sheet_name="Sheet1")
+            df.columns = df.columns.str.strip()
+            for _, row in df.iterrows():
+                machine = str(row.iloc[0]).strip()
+                uptime_str = str(row.iloc[1]).strip()
+                # Extract numeric value
+                uptime = int(''.join(filter(str.isdigit, uptime_str)))
+                machines[machine] = uptime
+        else:
+            print("[DATA] Machine uptime sheet 'Sheet1' not found. Using default values.")
+    except Exception as e:
+        print(f"[DATA] Error reading machine uptime: {str(e)}. Using default values.")
+        
+    # Fallback to default max uptime if missing
+    if not machines:
+        for m in config.MACHINES:
+            machines[m] = config.SHIFT_DURATION_MINUTES
+            
     print(f"[DATA] Machine uptimes: {machines}")
     return machines
 

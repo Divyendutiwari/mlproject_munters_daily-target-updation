@@ -11,18 +11,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
 
-def create_schedule(df, machines=None):
+def create_schedule(df, machines=None, start_offset_min=0):
     """Create optimized schedule for all machines.
     
     Strategy: Group by Production_Class first, then distribute to machines
     to minimize tool changes while balancing load.
+    
+    Args:
+        start_offset_min: minutes elapsed since shift start (for mid-shift rescheduling)
     """
     if machines is None:
         machines = config.MACHINES
     
-    capacity_min = config.EFFECTIVE_CAPACITY_MINUTES  # 405 min per machine
+    capacity_min = config.EFFECTIVE_CAPACITY_MINUTES  # 450 min per machine
     tool_change_min = config.TOOL_CHANGE_TIME_MINUTES  # 17 min
     shift_start = datetime.strptime(config.SHIFT_START_TIME, "%H:%M")
+    
+    # For mid-shift rescheduling, reduce available capacity
+    available_capacity = capacity_min - start_offset_min
+    if available_capacity <= 0:
+        available_capacity = 0
     
     # Sort panels: group by class to minimize tool changes
     df_sorted = df.sort_values(
@@ -30,11 +38,11 @@ def create_schedule(df, machines=None):
         ascending=[True, False]
     ).reset_index(drop=True)
     
-    # Initialize machine states
+    # Initialize machine states — start from offset
     machine_state = {}
     for m in machines:
         machine_state[m] = {
-            "current_time_min": 0,
+            "current_time_min": start_offset_min,
             "current_class": None,
             "schedule": [],
             "tool_changes": 0,
@@ -92,31 +100,49 @@ def create_schedule(df, machines=None):
             # Find machine with most remaining capacity
             best_machine = min(machines, key=lambda m: machine_state[m]["current_time_min"])
         
-        ms = machine_state[best_machine]
-        
-        # Add tool change if needed
-        if ms["current_class"] != cls:
-            tc_start = ms["current_time_min"]
-            ms["current_time_min"] += tool_change_min
-            ms["tool_changes"] += 1
-            ms["total_tool_time"] += tool_change_min
-            ms["schedule"].append({
-                "type": "tool_change",
-                "start_min": tc_start,
-                "end_min": ms["current_time_min"],
-                "start_time": (shift_start + timedelta(minutes=tc_start)).strftime("%H:%M"),
-                "end_time": (shift_start + timedelta(minutes=ms["current_time_min"])).strftime("%H:%M"),
-                "class": f"{ms['current_class'] if ms['current_class'] else 'Initial Setup'} → {cls}",
-                "fg_code": "—",
-                "duration_min": tool_change_min,
-            })
-        
-        ms["current_class"] = cls
+        # We will add tool changes only when we actually place the first panel of the class
         
         # Add panels
         for panel in panels:
             prod_time_min = panel["Production_Time_Sec"] / 60
-            if ms["current_time_min"] + prod_time_min > capacity_min:
+            ms = machine_state[best_machine]
+            tc_needed = tool_change_min if (ms["current_class"] != cls) else 0
+            
+            if ms["current_time_min"] + tc_needed + prod_time_min <= capacity_min:
+                # Panel fits on best_machine
+                if tc_needed > 0:
+                    tc_start = ms["current_time_min"]
+                    ms["current_time_min"] += tool_change_min
+                    ms["tool_changes"] += 1
+                    ms["total_tool_time"] += tool_change_min
+                    ms["schedule"].append({
+                        "type": "tool_change",
+                        "start_min": tc_start,
+                        "end_min": ms["current_time_min"],
+                        "start_time": (shift_start + timedelta(minutes=tc_start)).strftime("%H:%M"),
+                        "end_time": (shift_start + timedelta(minutes=ms["current_time_min"])).strftime("%H:%M"),
+                        "class": f"{ms['current_class'] if ms['current_class'] else 'Initial Setup'} → {cls}",
+                        "fg_code": "—",
+                        "duration_min": tool_change_min,
+                    })
+                
+                ms["current_class"] = cls
+                start = ms["current_time_min"]
+                ms["current_time_min"] += prod_time_min
+                ms["panels_produced"] += 1
+                ms["total_prod_time"] += prod_time_min
+                ms["schedule"].append({
+                    "type": "production",
+                    "start_min": start,
+                    "end_min": ms["current_time_min"],
+                    "start_time": (shift_start + timedelta(minutes=start)).strftime("%H:%M"),
+                    "end_time": (shift_start + timedelta(minutes=ms["current_time_min"])).strftime("%H:%M"),
+                    "class": cls,
+                    "fg_code": panel["FG_Design_Code"],
+                    "panel_id": panel["Panel_ID"],
+                    "duration_min": round(prod_time_min, 2),
+                })
+            else:
                 # Try to fit on another machine
                 overflow = True
                 for m2 in machines:
@@ -160,22 +186,6 @@ def create_schedule(df, machines=None):
                         break
                 if overflow:
                     continue  # Skip panel if no machine can fit it
-            else:
-                start = ms["current_time_min"]
-                ms["current_time_min"] += prod_time_min
-                ms["panels_produced"] += 1
-                ms["total_prod_time"] += prod_time_min
-                ms["schedule"].append({
-                    "type": "production",
-                    "start_min": start,
-                    "end_min": ms["current_time_min"],
-                    "start_time": (shift_start + timedelta(minutes=start)).strftime("%H:%M"),
-                    "end_time": (shift_start + timedelta(minutes=ms["current_time_min"])).strftime("%H:%M"),
-                    "class": cls,
-                    "fg_code": panel["FG_Design_Code"],
-                    "panel_id": panel["Panel_ID"],
-                    "duration_min": round(prod_time_min, 2),
-                })
     
     # Calculate utilization
     results = {}
