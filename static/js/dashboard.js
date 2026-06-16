@@ -465,6 +465,55 @@ async function loadSimulation(){
 }
 
 // ══════════════════════════════════════════════════════════
+// EXCEL UPLOAD
+// ══════════════════════════════════════════════════════════
+document.getElementById('btn-upload')?.addEventListener('click', () => {
+  document.getElementById('file-upload').click();
+});
+
+document.getElementById('file-upload')?.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const btn = document.getElementById('btn-upload');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '⏳ Uploading...';
+  btn.style.opacity = '0.7';
+  btn.style.pointerEvents = 'none';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+      showToast('✅ ' + data.message);
+      await loadKPIs();
+      await loadCharts();
+      await loadClassTable();
+      await loadSchedule();
+      await loadGantt();
+      await loadML();
+      await loadSimulation();
+    } else {
+      showToast('❌ Upload failed: ' + data.message);
+    }
+  } catch (err) {
+    showToast('❌ Upload error: ' + err.message);
+  }
+
+  btn.innerHTML = originalText;
+  btn.style.opacity = '1';
+  btn.style.pointerEvents = 'auto';
+  e.target.value = '';
+});
+
+// ══════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════
 (async()=>{

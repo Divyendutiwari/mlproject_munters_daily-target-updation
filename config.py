@@ -117,3 +117,5 @@ RF_PARAM_GRID = {
 FLASK_HOST = "127.0.0.1"
 FLASK_PORT = 5000
 FLASK_DEBUG = True
+UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)

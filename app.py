@@ -25,7 +25,7 @@ app = Flask(__name__)
 # Global data store
 APP_DATA = {}
 
-def initialize_system():
+def initialize_system(data_path=None):
     """Run the full pipeline: load, classify, ML, schedule, save."""
     print("\n" + "="*60)
     print("  MUNTERS PRODUCTION PLANNING SYSTEM - INITIALIZING")
@@ -36,8 +36,8 @@ def initialize_system():
     
     # 2. Load data
     print("\n--- STEP 1: Loading Data ---")
-    df = load_panel_dataset()
-    machines = load_machine_uptime()
+    df = load_panel_dataset(data_path)
+    machines = load_machine_uptime(data_path)
     thermal_timing = load_thermal_timing()
     non_thermal_timing = load_non_thermal_timing()
     
@@ -363,6 +363,33 @@ def api_reschedule():
     APP_DATA["schedule_summary"] = schedule_summary
     save_schedule(schedule_results)
     return jsonify({"success": True, "summary": schedule_summary})
+
+
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
+    if "file" not in request.files:
+        return jsonify({"success": False, "message": "No file part in the request"}), 400
+    
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"success": False, "message": "No file selected"}), 400
+        
+    if file and (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
+        from werkzeug.utils import secure_filename
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(config.UPLOAD_FOLDER, filename)
+        
+        try:
+            file.save(filepath)
+            print(f"\n[UPLOAD] New data file uploaded: {filepath}")
+            # Reinitialize the system with the new data
+            initialize_system(data_path=filepath)
+            return jsonify({"success": True, "message": "File uploaded and system successfully re-initialized."})
+        except Exception as e:
+            print(f"[UPLOAD ERROR] {str(e)}")
+            return jsonify({"success": False, "message": f"Error processing file: {str(e)}"}), 500
+    else:
+        return jsonify({"success": False, "message": "Invalid file format. Please upload an Excel file (.xlsx)"}), 400
 
 
 if __name__ == "__main__":

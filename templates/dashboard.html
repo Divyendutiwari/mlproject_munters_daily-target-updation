@@ -32,6 +32,8 @@
     <header class="top-bar">
       <h1 id="page-title">Production Overview</h1>
       <div class="header-actions">
+        <input type="file" id="file-upload" accept=".xlsx, .xls" style="display: none;" />
+        <button id="btn-upload" class="action-btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; gap: 8px;">📤 Upload Excel</button>
         <button id="btn-reschedule" class="action-btn" style="background: linear-gradient(135deg, var(--accent), var(--purple)); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; gap: 8px;">🔄 Redistribute Remaining</button>
         <span class="badge" id="shift-badge">SHIFT ACTIVE</span>
         <span class="timestamp" id="header-time"></span>

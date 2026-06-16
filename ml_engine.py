@@ -9,7 +9,6 @@ from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_sc
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from xgboost import XGBRegressor
 import joblib
 import warnings
 import sys, os
@@ -80,30 +79,7 @@ class ProductionMLEngine:
         print(f"[ML] Test set: {X_test.shape[0]} samples")
         print(f"[ML] Features: {len(self.feature_cols)}")
         
-        # --- Model 1: XGBoost with GridSearchCV ---
-        print("\n>> Training XGBoost with GridSearchCV...")
-        param_grid = config.XGBOOST_FAST_GRID if use_fast_grid else config.XGBOOST_PARAM_GRID
-        
-        xgb = XGBRegressor(random_state=config.RANDOM_STATE, verbosity=0)
-        grid_xgb = GridSearchCV(
-            xgb, param_grid, cv=config.CV_FOLDS,
-            scoring="r2", n_jobs=-1, verbose=0
-        )
-        grid_xgb.fit(X_train_scaled, y_train)
-        
-        xgb_best = grid_xgb.best_estimator_
-        xgb_pred = xgb_best.predict(X_test_scaled)
-        xgb_r2 = r2_score(y_test, xgb_pred)
-        xgb_mae = mean_absolute_error(y_test, xgb_pred)
-        xgb_rmse = np.sqrt(mean_squared_error(y_test, xgb_pred))
-        
-        print(f"  Best params: {grid_xgb.best_params_}")
-        print(f"  R² Score: {xgb_r2:.4f}")
-        print(f"  MAE: {xgb_mae:.2f} sec")
-        print(f"  RMSE: {xgb_rmse:.2f} sec")
-        
-        self.models["XGBoost"] = xgb_best
-        self.metrics["XGBoost"] = {"r2": xgb_r2, "mae": xgb_mae, "rmse": xgb_rmse, "best_params": grid_xgb.best_params_}
+
         
         # --- Model 2: Random Forest with GridSearchCV ---
         print("\n>> Training Random Forest with GridSearchCV...")
@@ -210,7 +186,7 @@ class ProductionMLEngine:
             self.feature_cols = joblib.load(os.path.join(config.MODELS_DIR, "feature_cols.pkl"))
             self.metrics = joblib.load(os.path.join(config.MODELS_DIR, "metrics.pkl"))
             
-            for name in ["XGBoost", "RandomForest", "GradientBoosting"]:
+            for name in ["RandomForest", "GradientBoosting"]:
                 path = os.path.join(config.MODELS_DIR, f"{name}_model.pkl")
                 if os.path.exists(path):
                     self.models[name] = joblib.load(path)

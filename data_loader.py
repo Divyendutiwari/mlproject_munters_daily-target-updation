@@ -12,14 +12,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
 
-def load_panel_dataset():
+def load_panel_dataset(file_path=None):
     """Load the main panel dataset from Excel."""
-    if not os.path.exists(config.PANEL_DATASET_PATH):
+    path_to_load = file_path if file_path else config.PANEL_DATASET_PATH
+    if not os.path.exists(path_to_load):
         raise FileNotFoundError(
-            f"Panel dataset not found at: {config.PANEL_DATASET_PATH}\n"
-            f"Set the MUNTERS_PANEL_DATA environment variable to the correct path."
+            f"Panel dataset not found at: {path_to_load}\n"
+            f"Set the MUNTERS_PANEL_DATA environment variable or upload a file."
         )
-    df = pd.read_excel(config.PANEL_DATASET_PATH, sheet_name="Munters_Panel_Dataset")
+    df = pd.read_excel(path_to_load, sheet_name="Munters_Panel_Dataset")
     df.columns = df.columns.str.strip()
     
     # Ensure correct types
@@ -40,9 +41,10 @@ def load_panel_dataset():
     return df
 
 
-def load_machine_uptime():
+def load_machine_uptime(file_path=None):
     """Load machine uptime data from Sheet2."""
-    df = pd.read_excel(config.PANEL_DATASET_PATH, sheet_name="Sheet1")
+    path_to_load = file_path if file_path else config.PANEL_DATASET_PATH
+    df = pd.read_excel(path_to_load, sheet_name="Sheet1")
     df.columns = df.columns.str.strip()
     machines = {}
     for _, row in df.iterrows():
