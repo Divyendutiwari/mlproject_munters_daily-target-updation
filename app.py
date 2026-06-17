@@ -160,11 +160,25 @@ def api_end_shift():
             fill = red_fill if bt_val == "Scheduled_Undone" else yellow_fill
             for col_idx in range(1, len(existing) + 1):
                 ws.cell(row=row_idx, column=col_idx).fill = fill
+        # Write Completed Panels
+        completed_df = df[df["Status"] == "Completed"].copy()
+        if not completed_df.empty:
+            comp_cols = ["FG_Design_Code", "Panel_Type", "Production_Class", "Length_mm", "Breadth_mm", "Area_mm2"]
+            comp_existing = [c for c in comp_cols if c in completed_df.columns]
+            comp_export = completed_df[comp_existing].reset_index(drop=True)
+            comp_export.to_excel(writer, index=False, sheet_name="Completed_Panels")
+            
+            ws_comp = writer.sheets["Completed_Panels"]
+            green_fill = PatternFill(start_color="99FF99", end_color="99FF99", fill_type="solid")
+            for row_idx in range(2, len(comp_export) + 2):
+                for col_idx in range(1, len(comp_existing) + 1):
+                    ws_comp.cell(row=row_idx, column=col_idx).fill = green_fill
+                    
     output.seek(0)
     
     date_str = datetime.now().strftime("%Y-%m-%d")
     return send_file(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                     as_attachment=True, download_name=f"Backlog_{date_str}.xlsx")
+                     as_attachment=True, download_name=f"End_Of_Shift_{date_str}.xlsx")
 
 
 @app.route("/api/kpis")

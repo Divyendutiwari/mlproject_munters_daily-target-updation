@@ -16,8 +16,10 @@
   --sidebar-w: 260px;
   --radius: 16px;
 }
-* { margin:0; padding:0; box-sizing:border-box; word-wrap: break-word; overflow-wrap: break-word; }
+* { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Inter',sans-serif; background:var(--bg-primary); color:var(--text); overflow-x:hidden; }
+/* General Text Wrapping for Dashboard Elements */
+.card, .kpi-card, .chart-card, .sim-box, .timeline-entry { word-wrap: break-word; overflow-wrap: break-word; }
 .app-container { display:flex; min-height:100vh; }
 
 /* ── Sidebar ── */

@@ -57,11 +57,15 @@ def create_schedule(df, machines=None, start_offset_min=0):
         class_panels = df_sorted[df_sorted["Production_Class"] == cls].to_dict("records")
         class_groups[cls] = class_panels
     
-    # Sort classes by total time (largest first for better packing)
+    # Identify priority classes (those that have backlog panels)
+    priority_classes = set()
+    if "_Source" in df.columns:
+        priority_classes = set(df[df["_Source"].isin(["Scheduled_Undone", "Unscheduled"])]["Production_Class"])
+
+    # Sort classes: Priority (backlog) classes first, then by total time (largest first for better packing)
     class_order = sorted(
         class_groups.keys(),
-        key=lambda c: sum(p["Production_Time_Sec"] for p in class_groups[c]),
-        reverse=True
+        key=lambda c: (0 if c in priority_classes else 1, -sum(p["Production_Time_Sec"] for p in class_groups[c]))
     )
     
     # Assign classes to machines using greedy load balancing
