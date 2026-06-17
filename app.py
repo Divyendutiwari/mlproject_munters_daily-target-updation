@@ -160,7 +160,6 @@ def api_end_shift():
     
     df = APP_DATA["df"]
     schedule = APP_DATA["schedule"]
-    date_str = datetime.now().strftime("%Y-%m-%d")
     
     # Build panel → machine map
     panel_machine_map = {}
@@ -172,7 +171,7 @@ def api_end_shift():
     # All scheduled panel IDs
     scheduled_ids = set(panel_machine_map.keys())
     
-    # ── 1. BACKLOG Excel (not completed panels) ──
+    # Backlog: NOT completed panels
     backlog_df = df[df["Status"] != "Completed"].copy()
     backlog_df["Scheduled_Machine"] = backlog_df["Panel_ID"].apply(
         lambda pid: panel_machine_map.get(pid, "Unscheduled"))
@@ -182,113 +181,47 @@ def api_end_shift():
     # Store backlog for next-day merging
     APP_DATA["backlog"] = backlog_df.copy()
     
-    from openpyxl.styles import PatternFill, Font, Alignment
+    # Generate styled Excel
+    from openpyxl.styles import PatternFill
+    export_cols = ["FG_Design_Code", "Panel_Type", "Production_Class",
+                   "Length_mm", "Breadth_mm", "Area_mm2",
+                   "Scheduled_Machine", "Backlog_Type"]
+    existing = [c for c in export_cols if c in backlog_df.columns]
+    export_df = backlog_df[existing].reset_index(drop=True)
     
-    backlog_export_cols = ["FG_Design_Code", "Panel_Type", "Production_Class",
-                           "Length_mm", "Breadth_mm", "Area_mm2",
-                           "Scheduled_Machine", "Backlog_Type"]
-    backlog_existing = [c for c in backlog_export_cols if c in backlog_df.columns]
-    backlog_export = backlog_df[backlog_existing].reset_index(drop=True)
-    
-    backlog_output = io.BytesIO()
-    with pd.ExcelWriter(backlog_output, engine="openpyxl") as writer:
-        backlog_export.to_excel(writer, index=False, sheet_name="Backlog")
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        export_df.to_excel(writer, index=False, sheet_name="Backlog")
         ws = writer.sheets["Backlog"]
-        format_excel_ws_as_table(ws, backlog_export, "BacklogTable")
+        format_excel_ws_as_table(ws, export_df, "BacklogTable")
         red_fill = PatternFill(start_color="FF9999", end_color="FF9999", fill_type="solid")
         yellow_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
-        bt_col_idx = list(backlog_export.columns).index("Backlog_Type") + 1
-        for row_idx in range(2, len(backlog_export) + 2):
-            bt_val = ws.cell(row=row_idx, column=bt_col_idx).value
+        bt_col = list(export_df.columns).index("Backlog_Type") + 2  # +2 for 1-index + header
+        for row_idx in range(2, len(export_df) + 2):
+            bt_val = ws.cell(row=row_idx, column=bt_col - 1 + 1).value
             fill = red_fill if bt_val == "Scheduled_Undone" else yellow_fill
-            for col_idx in range(1, len(backlog_existing) + 1):
+            for col_idx in range(1, len(existing) + 1):
                 ws.cell(row=row_idx, column=col_idx).fill = fill
-    backlog_output.seek(0)
-    
-    backlog_path = os.path.join(config.UPLOAD_FOLDER, f"Backlog_{date_str}.xlsx")
-    with open(backlog_path, "wb") as f:
-        f.write(backlog_output.read())
-    
-    # ── 2. COMPLETED PANELS Excel (done today) ──
-    completed_df = df[df["Status"] == "Completed"].copy()
-    completed_count = len(completed_df)
-    
-    if not completed_df.empty:
-        completed_df["Completed_On_Machine"] = completed_df["Panel_ID"].apply(
-            lambda pid: panel_machine_map.get(pid, "N/A"))
-        
-        comp_export_cols = ["FG_Design_Code", "Panel_Type", "Production_Class",
-                            "Length_mm", "Breadth_mm", "Area_mm2",
-                            "Production_Time_Sec", "Production_Time_Min",
-                            "Completed_On_Machine"]
-        comp_existing = [c for c in comp_export_cols if c in completed_df.columns]
-        comp_export = completed_df[comp_existing].reset_index(drop=True)
-        
-        completed_output = io.BytesIO()
-        with pd.ExcelWriter(completed_output, engine="openpyxl") as writer:
-            comp_export.to_excel(writer, index=False, sheet_name="Completed_Today")
-            ws_comp = writer.sheets["Completed_Today"]
-            format_excel_ws_as_table(ws_comp, comp_export, "CompletedTodayTable")
+        # Write Completed Panels
+        completed_df = df[df["Status"] == "Completed"].copy()
+        if not completed_df.empty:
+            comp_cols = ["FG_Design_Code", "Panel_Type", "Production_Class", "Length_mm", "Breadth_mm", "Area_mm2"]
+            comp_existing = [c for c in comp_cols if c in completed_df.columns]
+            comp_export = completed_df[comp_existing].reset_index(drop=True)
+            comp_export.to_excel(writer, index=False, sheet_name="Completed_Panels")
+            
+            ws_comp = writer.sheets["Completed_Panels"]
+            format_excel_ws_as_table(ws_comp, comp_export, "CompletedTable")
             green_fill = PatternFill(start_color="99FF99", end_color="99FF99", fill_type="solid")
-            header_fill = PatternFill(start_color="28A745", end_color="28A745", fill_type="solid")
-            header_font = Font(color="FFFFFF", bold=True)
-            for col_idx in range(1, len(comp_existing) + 1):
-                cell = ws_comp.cell(row=1, column=col_idx)
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = Alignment(horizontal="center")
             for row_idx in range(2, len(comp_export) + 2):
                 for col_idx in range(1, len(comp_existing) + 1):
                     ws_comp.cell(row=row_idx, column=col_idx).fill = green_fill
-            
-            # Add a summary row at the bottom
-            summary_row = len(comp_export) + 3
-            ws_comp.cell(row=summary_row, column=1).value = "TOTAL COMPLETED"
-            ws_comp.cell(row=summary_row, column=1).font = Font(bold=True, size=12)
-            ws_comp.cell(row=summary_row, column=2).value = f"{completed_count} panels"
-            ws_comp.cell(row=summary_row, column=2).font = Font(bold=True, size=12)
-            if "Production_Time_Min" in comp_existing:
-                total_min = comp_export["Production_Time_Min"].sum()
-                time_col = comp_existing.index("Production_Time_Min") + 1
-                ws_comp.cell(row=summary_row, column=time_col).value = f"{total_min:.1f} min total"
-                ws_comp.cell(row=summary_row, column=time_col).font = Font(bold=True, size=12)
-        
-        completed_output.seek(0)
-        completed_path = os.path.join(config.UPLOAD_FOLDER, f"Completed_Panels_{date_str}.xlsx")
-        with open(completed_path, "wb") as f:
-            f.write(completed_output.read())
+                    
+    output.seek(0)
     
-    backlog_count = len(backlog_df)
-    print(f"[SHIFT END] Backlog: {backlog_count} panels, Completed: {completed_count} panels")
-    
-    return jsonify({
-        "success": True,
-        "backlog_count": backlog_count,
-        "completed_count": completed_count,
-        "date": date_str,
-    })
-
-
-@app.route("/api/download_backlog")
-def api_download_backlog():
-    """Download the backlog Excel file generated at end of shift."""
     date_str = datetime.now().strftime("%Y-%m-%d")
-    backlog_path = os.path.join(config.UPLOAD_FOLDER, f"Backlog_{date_str}.xlsx")
-    if os.path.exists(backlog_path):
-        return send_file(backlog_path, as_attachment=True,
-                         download_name=f"Backlog_{date_str}.xlsx")
-    return jsonify({"success": False, "message": "Backlog file not found"}), 404
-
-
-@app.route("/api/download_completed")
-def api_download_completed():
-    """Download the completed panels Excel file generated at end of shift."""
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    completed_path = os.path.join(config.UPLOAD_FOLDER, f"Completed_Panels_{date_str}.xlsx")
-    if os.path.exists(completed_path):
-        return send_file(completed_path, as_attachment=True,
-                         download_name=f"Completed_Panels_{date_str}.xlsx")
-    return jsonify({"success": False, "message": "No completed panels file found"}), 404
+    return send_file(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                     as_attachment=True, download_name=f"End_Of_Shift_{date_str}.xlsx")
 
 
 @app.route("/api/kpis")

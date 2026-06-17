@@ -583,45 +583,32 @@ async function checkShiftStatus() {
 }
 
 document.getElementById('btn-end-shift')?.addEventListener('click', async () => {
-  if (!confirm("Are you sure you want to end the shift? This will generate the Backlog and Completed Panels Excel files.")) return;
+  if (!confirm("Are you sure you want to end the shift? This will generate the backlog Excel file.")) return;
   
-  showToast("⏳ Ending shift and generating reports...");
-  
-  try {
-    const res = await fetch('/api/end_shift', { method: 'POST' });
-    const data = await res.json();
+  const link = document.createElement('a');
+  showToast("⏳ Ending shift and generating backlog...");
+  const res = await fetch('/api/end_shift', { method: 'POST' });
+  if (res.ok) {
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    link.href = url;
     
-    if (data.success) {
-      // Download 1: Backlog Excel
-      if (data.backlog_count > 0) {
-        const backlogLink = document.createElement('a');
-        backlogLink.href = '/api/download_backlog';
-        backlogLink.download = `Backlog_${data.date}.xlsx`;
-        document.body.appendChild(backlogLink);
-        backlogLink.click();
-        document.body.removeChild(backlogLink);
-      }
-      
-      // Download 2: Completed Panels Excel (slight delay to avoid browser blocking)
-      if (data.completed_count > 0) {
-        setTimeout(() => {
-          const completedLink = document.createElement('a');
-          completedLink.href = '/api/download_completed';
-          completedLink.download = `Completed_Panels_${data.date}.xlsx`;
-          document.body.appendChild(completedLink);
-          completedLink.click();
-          document.body.removeChild(completedLink);
-        }, 800);
-      }
-      
-      const msg = `✅ Shift Ended! Backlog: ${data.backlog_count} panels, Completed: ${data.completed_count} panels`;
-      showToast(msg, 5000);
-      await checkShiftStatus();
-    } else {
-      showToast("❌ Failed to end shift.");
+    const disp = res.headers.get('Content-Disposition');
+    let fname = "Backlog.xlsx";
+    if (disp && disp.includes('filename=')) {
+      fname = disp.split('filename=')[1].replace(/"/g, '');
     }
-  } catch (err) {
-    showToast("❌ Error ending shift: " + err.message);
+    
+    link.download = fname;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    showToast("✅ Shift Ended. Backlog generated.");
+    await checkShiftStatus();
+  } else {
+    showToast("❌ Failed to end shift.");
   }
 });
 
