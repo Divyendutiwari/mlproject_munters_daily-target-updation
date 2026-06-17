@@ -32,12 +32,22 @@ def initialize_system(data_path=None):
     print("="*60)
     
     # 1. Initialize database
-    init_database()
+    try:
+        init_database()
+    except Exception as e:
+        print(f"[DB ERROR] Could not initialize database: {e}")
     
     # 2. Load data
     print("\n--- STEP 1: Loading Data ---")
-    df = load_panel_dataset(data_path)
-    machines = load_machine_uptime(data_path)
+    try:
+        df = load_panel_dataset(data_path)
+        machines = load_machine_uptime(data_path)
+    except Exception as e:
+        print(f"[DATA WARNING] Initial data not found or failed to load: {e}")
+        print("[INIT] Starting with an empty state. Please upload an Excel file via the dashboard.")
+        APP_DATA["shift_active"] = False
+        return
+
     thermal_timing = load_thermal_timing()
     non_thermal_timing = load_non_thermal_timing()
     
@@ -183,6 +193,13 @@ def api_end_shift():
 
 @app.route("/api/kpis")
 def api_kpis():
+    if "df" not in APP_DATA:
+        return jsonify({
+            "total_orders": 0, "thermal_panels": 0, "non_thermal_panels": 0, "total_classes": 0,
+            "total_scheduled": 0, "total_tool_changes": 0, "completed_panels": 0, "pending_panels": 0,
+            "best_model": "None", "best_r2": 0, "best_mae": 0, "shift_capacity": config.EFFECTIVE_CAPACITY_MINUTES,
+        })
+
     df = APP_DATA["df"]
     ss = APP_DATA["schedule_summary"]
     ml = APP_DATA["ml_metrics"]
@@ -206,6 +223,7 @@ def api_kpis():
 
 @app.route("/api/class_distribution")
 def api_class_distribution():
+    if "df" not in APP_DATA: return jsonify([])
     df = APP_DATA["df"]
     class_stats = df.groupby("Production_Class").agg(
         count=("FG_Design_Code", "count"),
@@ -223,6 +241,7 @@ def api_class_distribution():
 
 @app.route("/api/schedule")
 def api_schedule():
+    if "schedule" not in APP_DATA: return jsonify({})
     schedule = APP_DATA["schedule"]
     df = APP_DATA["df"]
     result = {}
@@ -255,6 +274,7 @@ def api_schedule():
 
 @app.route("/api/charts/area_distribution")
 def api_area_dist():
+    if "df" not in APP_DATA: return jsonify({"thermal": [], "non_thermal": []})
     df = APP_DATA["df"]
     thermal = df[df["Panel_Type"] == "Thermal"]["Area_mm2"].tolist()
     non_thermal = df[df["Panel_Type"] == "Non-Thermal"]["Area_mm2"].tolist()
@@ -263,6 +283,7 @@ def api_area_dist():
 
 @app.route("/api/charts/panel_type_split")
 def api_panel_split():
+    if "df" not in APP_DATA: return jsonify({})
     df = APP_DATA["df"]
     counts = df["Panel_Type"].value_counts().to_dict()
     return jsonify(counts)
@@ -270,6 +291,7 @@ def api_panel_split():
 
 @app.route("/api/charts/class_counts")
 def api_class_counts():
+    if "df" not in APP_DATA: return jsonify({})
     df = APP_DATA["df"]
     counts = df["Production_Class"].value_counts().to_dict()
     return jsonify(counts)
@@ -277,6 +299,7 @@ def api_class_counts():
 
 @app.route("/api/charts/machine_utilization")
 def api_machine_util():
+    if "schedule" not in APP_DATA: return jsonify({})
     schedule = APP_DATA["schedule"]
     result = {}
     for machine, data in schedule.items():
@@ -291,6 +314,7 @@ def api_machine_util():
 
 @app.route("/api/charts/gantt")
 def api_gantt():
+    if "schedule" not in APP_DATA: return jsonify([])
     schedule = APP_DATA["schedule"]
     df = APP_DATA["df"]
     gantt_data = []
@@ -318,6 +342,7 @@ def api_gantt():
 @app.route("/api/gantt_classes")
 def api_gantt_classes():
     """Return class-level info with completion status for the Gantt controls."""
+    if "schedule" not in APP_DATA: return jsonify([])
     df = APP_DATA["df"]
     schedule = APP_DATA["schedule"]
     scheduled_classes = set()
@@ -432,6 +457,8 @@ def api_download_class_excel(class_name):
 
 @app.route("/api/ml_metrics")
 def api_ml_metrics():
+    if "ml_engine" not in APP_DATA: 
+        return jsonify({"comparison": "", "best_model": "None", "metrics": {}})
     ml = APP_DATA["ml_engine"]
     return jsonify({
         "comparison": ml.get_model_comparison(),
@@ -449,6 +476,7 @@ def api_ml_metrics():
 
 @app.route("/api/box_simulation")
 def api_box_simulation():
+    if "area_bounds" not in APP_DATA: return jsonify([])
     df = APP_DATA["df"]
     ab = APP_DATA["area_bounds"]
     

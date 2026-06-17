@@ -10,9 +10,22 @@ import os
 # FILE PATHS
 # ─────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-MODELS_DIR = os.path.join(BASE_DIR, "models")
-OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+
+# Check if running on Vercel (read-only filesystem)
+IS_VERCEL = os.environ.get("VERCEL") == "1"
+
+if IS_VERCEL:
+    DATA_DIR = "/tmp/data"
+    MODELS_DIR = "/tmp/models"
+    OUTPUTS_DIR = "/tmp/outputs"
+else:
+    DATA_DIR = os.path.join(BASE_DIR, "data")
+    MODELS_DIR = os.path.join(BASE_DIR, "models")
+    OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(MODELS_DIR, exist_ok=True)
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
 # Input Excel paths (override via environment variables)
 PANEL_DATASET_PATH = os.environ.get(
