@@ -625,31 +625,5 @@ document.getElementById('btn-end-shift')?.addEventListener('click', async () => 
   await loadML();
   await loadSimulation();
 
-  // GSAP Animations
-  if (typeof gsap !== 'undefined') {
-    gsap.from('.kpi-card', {
-      y: 30,
-      opacity: 0,
-      duration: 0.8,
-      stagger: 0.1,
-      ease: 'power3.out',
-      delay: 0.2
-    });
-    gsap.from('.chart-card', {
-      y: 40,
-      opacity: 0,
-      duration: 1,
-      stagger: 0.15,
-      ease: 'power3.out',
-      delay: 0.5
-    });
-    gsap.from('.card', {
-      y: 40,
-      opacity: 0,
-      duration: 1,
-      stagger: 0.2,
-      ease: 'power3.out',
-      delay: 0.6
-    });
-  }
+  // GSAP Animations removed as requested
 })();
