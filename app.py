@@ -25,6 +25,37 @@ app = Flask(__name__)
 # Global data store
 APP_DATA = {}
 
+def format_excel_ws_as_table(ws, df, table_name):
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+    from openpyxl.utils import get_column_letter
+    
+    max_row = len(df) + 1
+    max_col = len(df.columns)
+    if max_row <= 1 or max_col == 0:
+        return
+    ref = f"A1:{get_column_letter(max_col)}{max_row}"
+    
+    safe_name = "".join(c for c in table_name if c.isalnum())
+    if not safe_name: safe_name = "Table1"
+    
+    tab = Table(displayName=safe_name, ref=ref)
+    style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False,
+                           showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+    tab.tableStyleInfo = style
+    ws.add_table(tab)
+    
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        ws.column_dimensions[column].width = min(max_length + 2, 50)
+
+
 def initialize_system(data_path=None):
     """Run the full pipeline: load, classify, ML, schedule, save."""
     print("\n" + "="*60)
@@ -162,6 +193,7 @@ def api_end_shift():
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         export_df.to_excel(writer, index=False, sheet_name="Backlog")
         ws = writer.sheets["Backlog"]
+        format_excel_ws_as_table(ws, export_df, "BacklogTable")
         red_fill = PatternFill(start_color="FF9999", end_color="FF9999", fill_type="solid")
         yellow_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
         bt_col = list(export_df.columns).index("Backlog_Type") + 2  # +2 for 1-index + header
@@ -179,6 +211,7 @@ def api_end_shift():
             comp_export.to_excel(writer, index=False, sheet_name="Completed_Panels")
             
             ws_comp = writer.sheets["Completed_Panels"]
+            format_excel_ws_as_table(ws_comp, comp_export, "CompletedTable")
             green_fill = PatternFill(start_color="99FF99", end_color="99FF99", fill_type="solid")
             for row_idx in range(2, len(comp_export) + 2):
                 for col_idx in range(1, len(comp_existing) + 1):
@@ -449,7 +482,9 @@ def api_download_class_excel(class_name):
     class_df = class_df[existing]
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        class_df.to_excel(writer, index=False, sheet_name=class_name[:31])
+        sheet_name = class_name[:31]
+        class_df.to_excel(writer, index=False, sheet_name=sheet_name)
+        format_excel_ws_as_table(writer.sheets[sheet_name], class_df, f"ClassTable{sheet_name}")
     output.seek(0)
     return send_file(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                      as_attachment=True, download_name=f"{class_name}_panels.xlsx")
@@ -635,6 +670,7 @@ def api_upload():
             with pd.ExcelWriter(plan_output, engine="openpyxl") as writer:
                 plan_df.to_excel(writer, index=False, sheet_name="Next_Day_Plan")
                 ws = writer.sheets["Next_Day_Plan"]
+                format_excel_ws_as_table(ws, plan_df, "NextDayPlanTable")
                 red_fill = PatternFill(start_color="FF9999", end_color="FF9999", fill_type="solid")
                 yellow_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
                 origin_col_idx = list(plan_df.columns).index("Origin") + 1
