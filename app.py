@@ -346,6 +346,56 @@ def api_mark_class_completed():
     return jsonify({"success": True, "count": count, "message": f"{count} panels of class '{class_name}' marked completed"})
 
 
+@app.route("/api/mark_class_completed_and_sync", methods=["POST"])
+def api_mark_class_completed_and_sync():
+    """Mark ALL panels of a given production class as Completed and sync to GitHub."""
+    data = request.json
+    class_name = data.get("class_name")
+    if not class_name:
+        return jsonify({"success": False, "message": "Missing class_name"}), 400
+    
+    df = APP_DATA["df"]
+    mask = df["Production_Class"] == class_name
+    count = int(mask.sum())
+    if count == 0:
+        return jsonify({"success": False, "message": f"No panels found for class {class_name}"}), 404
+        
+    df.loc[mask, "Status"] = "Completed"
+    APP_DATA["df"] = df
+    
+    # Save the updated panels to db so status persists
+    try:
+        from database import save_panels
+        save_panels(df)
+    except Exception as e:
+        print("Database save error:", e)
+
+    # Sync to GitHub
+    import subprocess
+    git_msg = "Successfully synced to GitHub"
+    try:
+        # Commit the database changes or any file changes
+        cwd = config.BASE_DIR if hasattr(config, 'BASE_DIR') else os.path.dirname(os.path.abspath(__file__))
+        subprocess.run(["git", "add", "."], check=True, cwd=cwd)
+        # Only commit if there are changes
+        status_res = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=cwd)
+        if status_res.stdout.strip():
+            subprocess.run(["git", "commit", "-m", f"Dashboard update: Marked class {class_name} as done"], check=True, cwd=cwd)
+            subprocess.run(["git", "push"], check=True, cwd=cwd)
+        else:
+            git_msg = "No changes to sync"
+    except Exception as e:
+        git_msg = f"Git sync error: {str(e)}"
+        print(git_msg)
+        
+    return jsonify({
+        "success": True, 
+        "count": count, 
+        "message": f"{count} panels of class '{class_name}' marked completed",
+        "git_msg": git_msg
+    })
+
+
 @app.route("/api/download_class_excel/<path:class_name>")
 def api_download_class_excel(class_name):
     """Download an Excel file containing all panels of a specific class."""

@@ -166,12 +166,14 @@ async function loadGantt() {
       const label = isTC ? 'TC' : (width > 3 ? entry.class.split('_').slice(1).join('_') : '');
       const bgStyle = isTC ? '' : `background:${color};`;
 
+      const cursorStyle = isTC ? '' : 'cursor: pointer;';
       html += `<div class="gantt-bar type-${entry.type}${statusCls}" 
-                    style="left:${left}%;width:${width}%;${bgStyle}" 
+                    style="left:${left}%;width:${width}%;${bgStyle}${cursorStyle}" 
                     data-idx="${idx}" data-machine="${machine}"
                     onmouseenter="showGanttTooltip(event, ${escapeAttr(JSON.stringify(entry))}, '${color}')"
                     onmousemove="positionTooltip(event)"
-                    onmouseleave="hideGanttTooltip()">
+                    onmouseleave="hideGanttTooltip()"
+                    ${!isTC ? `onclick="markClassDoneAndSync('${entry.class}')"` : ''}>
                 <span class="bar-text">${label}</span>
               </div>`;
     });
@@ -279,6 +281,36 @@ async function markClassDone(className, btn) {
     setTimeout(() => { btn.innerHTML = '☐ Mark Done'; }, 2000);
   }
 }
+
+// ══════════════════════════════════════════════════════════
+// MARK CLASS DONE FROM GANTT BAR AND SYNC TO GITHUB
+// ══════════════════════════════════════════════════════════
+window.markClassDoneAndSync = async function(className) {
+  if (!confirm(`Mark all panels in class ${className} as done and sync to GitHub?`)) return;
+  
+  showToast(`⏳ Marking ${className} as done and syncing to GitHub...`);
+  
+  try {
+    const res = await fetch('/api/mark_class_completed_and_sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_name: className }),
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+      showToast(`✅ ${className} marked done. Sync: ${data.git_msg}`);
+      await loadGantt();
+      await loadSchedule();
+      await loadKPIs();
+      await loadClassTable();
+    } else {
+      showToast(`❌ Failed: ${data.message}`);
+    }
+  } catch (err) {
+    showToast(`❌ Error: ${err.message}`);
+  }
+};
 
 // ══════════════════════════════════════════════════════════
 // DOWNLOAD CLASS EXCEL
