@@ -1,5 +1,5 @@
 // Munters Production Planning Dashboard - JS
-const PLOTLY_DARK = {paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:'#94a3b8',family:'Inter'},margin:{l:50,r:20,t:40,b:50},colorway:['#6366f1','#06b6d4','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']};
+const PLOTLY_LIGHT = {paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:'#0f172a',family:'Inter'},margin:{l:50,r:20,t:40,b:50},colorway:['#2563eb','#0891b2','#059669','#d97706','#dc2626','#7c3aed','#ec4899','#14b8a6']};
 
 const CLASS_PALETTE = [
   '#6366f1','#06b6d4','#10b981','#f59e0b','#ef4444',
@@ -404,25 +404,25 @@ async function loadKPIs(){
 async function loadCharts(){
   // Panel Type Split
   const split=await api('/api/charts/panel_type_split');
-  Plotly.newPlot('chart-panel-split',[{values:Object.values(split),labels:Object.keys(split),type:'pie',hole:.55,marker:{colors:['#ef4444','#06b6d4']},textfont:{size:13}}],{...PLOTLY_DARK,title:{text:'Thermal vs Non-Thermal',font:{size:15,color:'#f1f5f9'}},showlegend:true,legend:{font:{size:12}}},{responsive:true});
+  Plotly.newPlot('chart-panel-split',[{values:Object.values(split),labels:Object.keys(split),type:'pie',hole:.55,marker:{colors:['#dc2626','#0891b2']},textfont:{size:13}}],{...PLOTLY_LIGHT,title:{text:'Thermal vs Non-Thermal',font:{size:15,color:'#0f172a'}},showlegend:true,legend:{font:{size:12}}},{responsive:true});
 
   // Area Distribution
   const area=await api('/api/charts/area_distribution');
-  Plotly.newPlot('chart-area-dist',[{x:area.thermal,type:'histogram',name:'Thermal',marker:{color:'rgba(239,68,68,0.6)'},nbinsx:30},{x:area.non_thermal,type:'histogram',name:'Non-Thermal',marker:{color:'rgba(6,182,212,0.6)'},nbinsx:30}],{...PLOTLY_DARK,title:{text:'Area Distribution (mm²)',font:{size:15,color:'#f1f5f9'}},barmode:'overlay',xaxis:{title:'Area (mm²)',gridcolor:'rgba(255,255,255,0.05)'},yaxis:{title:'Count',gridcolor:'rgba(255,255,255,0.05)'}},{responsive:true});
+  Plotly.newPlot('chart-area-dist',[{x:area.thermal,type:'histogram',name:'Thermal',marker:{color:'rgba(220,38,38,0.6)'},nbinsx:30},{x:area.non_thermal,type:'histogram',name:'Non-Thermal',marker:{color:'rgba(8,145,178,0.6)'},nbinsx:30}],{...PLOTLY_LIGHT,title:{text:'Area Distribution (mm²)',font:{size:15,color:'#0f172a'}},barmode:'overlay',xaxis:{title:'Area (mm²)',gridcolor:'rgba(0,0,0,0.05)'},yaxis:{title:'Count',gridcolor:'rgba(0,0,0,0.05)'}},{responsive:true});
 
   // Machine Utilization
   const util=await api('/api/charts/machine_utilization');
   const machines=Object.keys(util);
   Plotly.newPlot('chart-machine-util',[
-    {x:machines,y:machines.map(m=>util[m].production),name:'Production',type:'bar',marker:{color:'#10b981'}},
-    {x:machines,y:machines.map(m=>util[m].tool_change),name:'Tool Change',type:'bar',marker:{color:'#f59e0b'}},
-    {x:machines,y:machines.map(m=>util[m].idle),name:'Idle',type:'bar',marker:{color:'#475569'}},
-  ],{...PLOTLY_DARK,title:{text:'Machine Time Breakdown (min)',font:{size:15,color:'#f1f5f9'}},barmode:'stack',yaxis:{title:'Minutes',gridcolor:'rgba(255,255,255,0.05)'},xaxis:{gridcolor:'rgba(255,255,255,0.05)'}},{responsive:true});
+    {x:machines,y:machines.map(m=>util[m].production),name:'Production',type:'bar',marker:{color:'#059669'}},
+    {x:machines,y:machines.map(m=>util[m].tool_change),name:'Tool Change',type:'bar',marker:{color:'#d97706'}},
+    {x:machines,y:machines.map(m=>util[m].idle),name:'Idle',type:'bar',marker:{color:'#94a3b8'}},
+  ],{...PLOTLY_LIGHT,title:{text:'Machine Time Breakdown (min)',font:{size:15,color:'#0f172a'}},barmode:'stack',yaxis:{title:'Minutes',gridcolor:'rgba(0,0,0,0.05)'},xaxis:{gridcolor:'rgba(0,0,0,0.05)'}},{responsive:true});
 
   // Class Counts
   const cc=await api('/api/charts/class_counts');
   const sorted=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
-  Plotly.newPlot('chart-class-counts',[{x:sorted.map(s=>s[0]),y:sorted.map(s=>s[1]),type:'bar',marker:{color:sorted.map((_,i)=>`hsl(${230+i*8},70%,60%)`)}}],{...PLOTLY_DARK,title:{text:'Panels per Class',font:{size:15,color:'#f1f5f9'}},xaxis:{tickangle:-45,tickfont:{size:9},gridcolor:'rgba(255,255,255,0.05)'},yaxis:{title:'Count',gridcolor:'rgba(255,255,255,0.05)'}},{responsive:true});
+  Plotly.newPlot('chart-class-counts',[{x:sorted.map(s=>s[0]),y:sorted.map(s=>s[1]),type:'bar',marker:{color:sorted.map((_,i)=>`hsl(${230+i*8},70%,60%)`)}}],{...PLOTLY_LIGHT,title:{text:'Panels per Class',font:{size:15,color:'#0f172a'}},xaxis:{tickangle:-45,tickfont:{size:9},gridcolor:'rgba(0,0,0,0.05)'},yaxis:{title:'Count',gridcolor:'rgba(0,0,0,0.05)'}},{responsive:true});
 }
 
 // ══════════════════════════════════════════════════════════
@@ -470,18 +470,18 @@ async function loadML(){
   let html='<div class="model-cards">';
   for(const[name,m]of Object.entries(data.metrics)){
     const isBest=name===data.best_model;
-    const color=m.r2>.95?'#10b981':m.r2>.9?'#06b6d4':'#f59e0b';
-    html+=`<div class="model-card ${isBest?'best':''}"><h4>${isBest?'⭐ ':''}${name}</h4><div class="r2-value" style="color:${color}">${(m.r2*100).toFixed(2)}%</div><div style="font-size:11px;color:#64748b;margin-top:4px">R² Score</div><div class="metric-row"><span>MAE</span><span>${m.mae.toFixed(2)}s</span></div><div class="metric-row"><span>RMSE</span><span>${m.rmse.toFixed(2)}s</span></div>${isBest?'<div style="margin-top:12px;font-size:11px;color:#10b981;font-weight:600">★ BEST MODEL</div>':''}</div>`;
+    const color=m.r2>.95?'#059669':m.r2>.9?'#0891b2':'#d97706';
+    html+=`<div class="model-card ${isBest?'best':''}"><h4>${isBest?'⭐ ':''}${name}</h4><div class="r2-value" style="color:${color}">${(m.r2*100).toFixed(2)}%</div><div style="font-size:11px;color:#64748b;margin-top:4px">R² Score</div><div class="metric-row"><span>MAE</span><span>${m.mae.toFixed(2)}s</span></div><div class="metric-row"><span>RMSE</span><span>${m.rmse.toFixed(2)}s</span></div>${isBest?'<div style="margin-top:12px;font-size:11px;color:#059669;font-weight:600">★ BEST MODEL</div>':''}</div>`;
   }
   html+='</div>';c.innerHTML=html;
 
   const names=Object.keys(data.metrics);
-  Plotly.newPlot('ml-r2-chart',[{x:names,y:names.map(n=>data.metrics[n].r2*100),type:'bar',marker:{color:names.map(n=>n===data.best_model?'#10b981':'#6366f1')},text:names.map(n=>(data.metrics[n].r2*100).toFixed(2)+'%'),textposition:'outside'}],{...PLOTLY_DARK,title:{text:'R² Score Comparison (%)',font:{size:14,color:'#f1f5f9'}},yaxis:{range:[0,105],gridcolor:'rgba(255,255,255,0.05)'}},{responsive:true});
+  Plotly.newPlot('ml-r2-chart',[{x:names,y:names.map(n=>data.metrics[n].r2*100),type:'bar',marker:{color:names.map(n=>n===data.best_model?'#059669':'#2563eb')},text:names.map(n=>(data.metrics[n].r2*100).toFixed(2)+'%'),textposition:'outside'}],{...PLOTLY_LIGHT,title:{text:'R² Score Comparison (%)',font:{size:14,color:'#0f172a'}},yaxis:{range:[0,105],gridcolor:'rgba(0,0,0,0.05)'}},{responsive:true});
 
   Plotly.newPlot('ml-error-chart',[
-    {x:names,y:names.map(n=>data.metrics[n].mae),name:'MAE',type:'bar',marker:{color:'#f59e0b'}},
-    {x:names,y:names.map(n=>data.metrics[n].rmse),name:'RMSE',type:'bar',marker:{color:'#ef4444'}}
-  ],{...PLOTLY_DARK,title:{text:'Error Comparison (seconds)',font:{size:14,color:'#f1f5f9'}},barmode:'group',yaxis:{gridcolor:'rgba(255,255,255,0.05)'}},{responsive:true});
+    {x:names,y:names.map(n=>data.metrics[n].mae),name:'MAE',type:'bar',marker:{color:'#d97706'}},
+    {x:names,y:names.map(n=>data.metrics[n].rmse),name:'RMSE',type:'bar',marker:{color:'#dc2626'}}
+  ],{...PLOTLY_LIGHT,title:{text:'Error Comparison (seconds)',font:{size:14,color:'#0f172a'}},barmode:'group',yaxis:{gridcolor:'rgba(0,0,0,0.05)'}},{responsive:true});
 }
 
 // ══════════════════════════════════════════════════════════
@@ -624,4 +624,32 @@ document.getElementById('btn-end-shift')?.addEventListener('click', async () => 
   await loadGantt();
   await loadML();
   await loadSimulation();
+
+  // GSAP Animations
+  if (typeof gsap !== 'undefined') {
+    gsap.from('.kpi-card', {
+      y: 30,
+      opacity: 0,
+      duration: 0.8,
+      stagger: 0.1,
+      ease: 'power3.out',
+      delay: 0.2
+    });
+    gsap.from('.chart-card', {
+      y: 40,
+      opacity: 0,
+      duration: 1,
+      stagger: 0.15,
+      ease: 'power3.out',
+      delay: 0.5
+    });
+    gsap.from('.card', {
+      y: 40,
+      opacity: 0,
+      duration: 1,
+      stagger: 0.2,
+      ease: 'power3.out',
+      delay: 0.6
+    });
+  }
 })();
