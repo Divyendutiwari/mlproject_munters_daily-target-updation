@@ -30,15 +30,15 @@ os.makedirs(OUTPUTS_DIR, exist_ok=True)
 # Input Excel paths (override via environment variables)
 PANEL_DATASET_PATH = os.environ.get(
     "MUNTERS_PANEL_DATA",
-    r"C:\Users\divye\Downloads\Munters_Panel_Dataset_500.xlsx"
+    os.path.join(DATA_DIR, "Munters_Panel_Dataset_500.xlsx")
 )
 THERMAL_TIMING_PATH = os.environ.get(
     "MUNTERS_THERMAL_TIMING",
-    r"C:\Users\divye\Downloads\Thermal_Plate_FINAL .xlsx"
+    os.path.join(DATA_DIR, "Thermal_Plate_FINAL.xlsx")
 )
 NON_THERMAL_TIMING_PATH = os.environ.get(
     "MUNTERS_NON_THERMAL_TIMING",
-    r"C:\Users\divye\Downloads\NON-THERMAL_Cycle_Study.xlsx"
+    os.path.join(DATA_DIR, "NON-THERMAL_Cycle_Study.xlsx")
 )
 
 # Database
