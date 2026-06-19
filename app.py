@@ -205,14 +205,39 @@ def api_end_shift():
         # Write Completed Panels
         completed_df = df[df["Status"] == "Completed"].copy()
         if not completed_df.empty:
-            comp_cols = ["FG_Design_Code", "Panel_Type", "Production_Class", "Length_mm", "Breadth_mm", "Area_mm2"]
+            # Done in a day sheet calculation
+            completed_df["Strokes"] = completed_df["Panel_Type"].apply(lambda x: 12 if x == "Thermal" else 4)
+            
+            done_summary = completed_df.groupby(["FG_Design_Code", "Panel_Type"]).agg(
+                Total_Panels=("Panel_ID", "count"),
+                Total_Area_mm2=("Area_mm2", "sum"),
+                Total_Strokes=("Strokes", "sum")
+            ).reset_index()
+            
+            done_summary.to_excel(writer, index=False, sheet_name="Done_in_a_Day")
+            ws_done = writer.sheets["Done_in_a_Day"]
+            format_excel_ws_as_table(ws_done, done_summary, "DoneInADayTable")
+            
+            # Add grand totals at the bottom
+            max_row = len(done_summary) + 2
+            ws_done.cell(row=max_row, column=1, value="GRAND TOTAL")
+            ws_done.cell(row=max_row, column=3, value=done_summary["Total_Panels"].sum())
+            ws_done.cell(row=max_row, column=4, value=done_summary["Total_Area_mm2"].sum())
+            ws_done.cell(row=max_row, column=5, value=done_summary["Total_Strokes"].sum())
+            
+            green_fill = PatternFill(start_color="99FF99", end_color="99FF99", fill_type="solid")
+            for row_idx in range(2, len(done_summary) + 2):
+                for col_idx in range(1, len(done_summary.columns) + 1):
+                    ws_done.cell(row=row_idx, column=col_idx).fill = green_fill
+                    
+            # Completed Panels sheet
+            comp_cols = ["FG_Design_Code", "Panel_Type", "Production_Class", "Length_mm", "Breadth_mm", "Area_mm2", "Strokes"]
             comp_existing = [c for c in comp_cols if c in completed_df.columns]
             comp_export = completed_df[comp_existing].reset_index(drop=True)
             comp_export.to_excel(writer, index=False, sheet_name="Completed_Panels")
             
             ws_comp = writer.sheets["Completed_Panels"]
             format_excel_ws_as_table(ws_comp, comp_export, "CompletedTable")
-            green_fill = PatternFill(start_color="99FF99", end_color="99FF99", fill_type="solid")
             for row_idx in range(2, len(comp_export) + 2):
                 for col_idx in range(1, len(comp_existing) + 1):
                     ws_comp.cell(row=row_idx, column=col_idx).fill = green_fill
@@ -230,6 +255,7 @@ def api_kpis():
         return jsonify({
             "total_orders": 0, "thermal_panels": 0, "non_thermal_panels": 0, "total_classes": 0,
             "total_scheduled": 0, "total_tool_changes": 0, "completed_panels": 0, "pending_panels": 0,
+            "total_strokes_done": 0,
             "best_model": "None", "best_r2": 0, "best_mae": 0, "shift_capacity": config.EFFECTIVE_CAPACITY_MINUTES,
         })
 
@@ -238,6 +264,12 @@ def api_kpis():
     ml = APP_DATA["ml_metrics"]
     best_model = APP_DATA["ml_engine"].best_model_name
     
+    completed_df = df[df["Status"] == "Completed"]
+    strokes_done = 0
+    if not completed_df.empty:
+        strokes_done += len(completed_df[completed_df["Panel_Type"] == "Thermal"]) * 12
+        strokes_done += len(completed_df[completed_df["Panel_Type"] == "Non-Thermal"]) * 4
+    
     return jsonify({
         "total_orders": len(df),
         "thermal_panels": int((df["Panel_Type"] == "Thermal").sum()),
@@ -245,8 +277,9 @@ def api_kpis():
         "total_classes": int(df["Production_Class"].nunique()),
         "total_scheduled": ss["total_panels_scheduled"],
         "total_tool_changes": ss["total_tool_changes"],
-        "completed_panels": int((df["Status"] == "Completed").sum()),
+        "completed_panels": int(len(completed_df)),
         "pending_panels": int((df["Status"] == "Pending").sum()),
+        "total_strokes_done": int(strokes_done),
         "best_model": best_model,
         "best_r2": round(ml[best_model]["r2"] * 100, 2),
         "best_mae": round(ml[best_model]["mae"], 2),
