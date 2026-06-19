@@ -255,7 +255,7 @@ def api_kpis():
         return jsonify({
             "total_orders": 0, "thermal_panels": 0, "non_thermal_panels": 0, "total_classes": 0,
             "total_scheduled": 0, "total_tool_changes": 0, "completed_panels": 0, "pending_panels": 0,
-            "total_strokes_done": 0,
+            "total_strokes_done": 0, "total_area_done": 0,
             "best_model": "None", "best_r2": 0, "best_mae": 0, "shift_capacity": config.EFFECTIVE_CAPACITY_MINUTES,
         })
 
@@ -266,9 +266,11 @@ def api_kpis():
     
     completed_df = df[df["Status"] == "Completed"]
     strokes_done = 0
+    area_done = 0
     if not completed_df.empty:
         strokes_done += len(completed_df[completed_df["Panel_Type"] == "Thermal"]) * 12
         strokes_done += len(completed_df[completed_df["Panel_Type"] == "Non-Thermal"]) * 4
+        area_done = int(completed_df["Area_mm2"].sum())
     
     return jsonify({
         "total_orders": len(df),
@@ -280,6 +282,7 @@ def api_kpis():
         "completed_panels": int(len(completed_df)),
         "pending_panels": int((df["Status"] == "Pending").sum()),
         "total_strokes_done": int(strokes_done),
+        "total_area_done": area_done,
         "best_model": best_model,
         "best_r2": round(ml[best_model]["r2"] * 100, 2),
         "best_mae": round(ml[best_model]["mae"], 2),

@@ -67,6 +67,10 @@ def assign_production_time(df, thermal_timing, non_thermal_timing):
         if length_group == "Short": time_factor = 0.92
         elif length_group == "Medium": time_factor = 1.0
         else: time_factor = 1.08
+        
+        # Increase time by 25% as requested
+        time_factor *= 1.25
+        
         production_times.append(round(base_time * time_factor, 2))
     df["Production_Time_Sec"] = production_times
     df["Production_Time_Min"] = (df["Production_Time_Sec"] / 60).round(3)

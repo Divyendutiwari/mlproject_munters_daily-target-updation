@@ -393,6 +393,7 @@ async function loadKPIs(){
     {icon:'✔️',value:d.completed_panels,label:'Completed'},
     {icon:'⏳',value:d.pending_panels,label:'Pending'},
     {icon:'🔨',value:d.total_strokes_done,label:'Strokes Done'},
+    {icon:'📐',value:d.total_area_done.toLocaleString(),label:'Total Area Done (mm²)'},
     {icon:'🤖',value:d.best_r2+'%',label:'ML R² ('+d.best_model+')'},
   ];
   const g=document.getElementById('kpi-grid');
