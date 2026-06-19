@@ -751,6 +751,77 @@ def api_download_next_day_plan():
     return jsonify({"success": False, "message": "Next day plan not found"}), 404
 
 
+@app.route("/api/download_live_status")
+def api_download_live_status():
+    if "df" not in APP_DATA:
+        return jsonify({"success": False, "message": "No data available"}), 404
+        
+    df = APP_DATA["df"].copy()
+    schedule = APP_DATA.get("schedule", {})
+    
+    panel_machine_map = {}
+    for machine, data in schedule.items():
+        for entry in data["schedule"]:
+            if entry["type"] == "production":
+                panel_machine_map[entry["panel_id"]] = machine
+                
+    df["Scheduled_Machine"] = df["Panel_ID"].apply(lambda pid: panel_machine_map.get(pid, "Unscheduled"))
+    
+    def get_live_status(row):
+        if row["Status"] == "Completed":
+            return "Completed"
+        elif row["Scheduled_Machine"] != "Unscheduled":
+            return "Scheduled"
+        else:
+            return "Unscheduled"
+            
+    df["Live_Status"] = df.apply(get_live_status, axis=1)
+    
+    export_cols = ["Panel_ID", "FG_Design_Code", "Panel_Type", "Production_Class", 
+                   "Length_mm", "Breadth_mm", "Area_mm2", "Scheduled_Machine", "Live_Status"]
+    
+    existing_cols = [c for c in export_cols if c in df.columns]
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        machines = list(schedule.keys())
+        
+        from openpyxl.styles import PatternFill
+        green_fill = PatternFill(start_color="99FF99", end_color="99FF99", fill_type="solid")
+        yellow_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
+        red_fill = PatternFill(start_color="FF9999", end_color="FF9999", fill_type="solid")
+        
+        groups = df.groupby("Scheduled_Machine")
+        for machine in machines + ["Unscheduled"]:
+            if machine in groups.groups:
+                machine_df = groups.get_group(machine)[existing_cols].reset_index(drop=True)
+                if not machine_df.empty:
+                    sheet_name = machine[:31]
+                    machine_df.to_excel(writer, index=False, sheet_name=sheet_name)
+                    ws = writer.sheets[sheet_name]
+                    format_excel_ws_as_table(ws, machine_df, f"Table_{sheet_name.replace('-', '_')}")
+                    
+                    status_col_idx = list(machine_df.columns).index("Live_Status") + 1
+                    for row_idx in range(2, len(machine_df) + 2):
+                        status_val = ws.cell(row=row_idx, column=status_col_idx).value
+                        fill = None
+                        if status_val == "Completed":
+                            fill = green_fill
+                        elif status_val == "Scheduled":
+                            fill = yellow_fill
+                        else:
+                            fill = red_fill
+                        
+                        if fill:
+                            for col_idx in range(1, len(machine_df.columns) + 1):
+                                ws.cell(row=row_idx, column=col_idx).fill = fill
+                                
+    output.seek(0)
+    date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    return send_file(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                     as_attachment=True, download_name=f"Live_Status_{date_str}.xlsx")
+
+
 if __name__ == "__main__":
     initialize_system()
     print(f"\n>> Dashboard running at http://{config.FLASK_HOST}:{config.FLASK_PORT}")

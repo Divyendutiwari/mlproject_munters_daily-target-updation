@@ -615,6 +615,14 @@ document.getElementById('btn-end-shift')?.addEventListener('click', async () => 
 });
 
 // ══════════════════════════════════════════════════════════
+// LIVE STATUS DOWNLOAD
+// ══════════════════════════════════════════════════════════
+document.getElementById('btn-download-live')?.addEventListener('click', () => {
+  showToast("📥 Downloading Live Status Excel...", 3000);
+  window.location.href = '/api/download_live_status';
+});
+
+// ══════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════
 (async()=>{
