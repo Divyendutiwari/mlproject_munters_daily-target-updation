@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Size Segregation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <div class="header-text">
+                    <h1>Self-Segregation: Pyramid Stacking</h1>
+                    <p>Machine sequence optimized by panel size. Largest pieces process first to build a naturally segregated, stable stack on a single work table.</p>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button id="btn-download" class="btn secondary" style="display:none;">Download Picture</button>
+                <button id="btn-load" class="btn secondary">Load 80+ Sheets</button>
+                <button id="btn-optimize" class="btn primary" disabled>Run Machine Sequence</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Left Side: Queue Visualization -->
+            <section class="queue-section">
+                <!-- Original Queue -->
+                <div class="card queue-card">
+                    <div class="card-header">
+                        <h2>1. Original Queue (Random Sizes)</h2>
+                        <span class="badge badge-warning">Unstable Stacking</span>
+                    </div>
+                    <div class="queue-track" id="track-original">
+                        <div class="empty-state">Click "Load Sheets" to view data.</div>
+                    </div>
+                </div>
+
+                <!-- Optimized Queue -->
+                <div class="card queue-card mt-2">
+                    <div class="card-header">
+                        <h2>2. Optimized Sequence (Largest to Smallest)</h2>
+                        <span class="badge badge-success">Perfect Pyramid</span>
+                    </div>
+                    <div class="queue-track optimized-bg" id="track-optimized">
+                        <div class="empty-state">Click "Run Machine Sequence" to generate.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Side: The 3D Work Table -->
+            <section class="machine-section">
+                <div class="card machine-card">
+                    <div class="card-header">
+                        <h2>Work Table Assembly</h2>
+                    </div>
+                    
+                    <div class="machine-area">
+                        <!-- Machine Status -->
+                        <div class="machine-head">
+                            <div class="current-sheet-display" id="active-sheet">
+                                <p>Waiting for sequence...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- 3D Table Area -->
+                        <div class="factory-floor isometric-view" id="capture-area">
+                            <div class="zoom-controls">
+                                <button id="btn-zoom-in" title="Zoom In">+</button>
+                                <button id="btn-zoom-out" title="Zoom Out">-</button>
+                            </div>
+                            <div class="work-table-wrapper" id="table-wrapper">
+                                <div class="work-table" id="work-table">
+                                    <!-- The panels will drop and stack here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Hover Tooltip -->
+                            <div id="panel-tooltip" class="tooltip hidden">
+                                <strong id="tt-name">Part Name</strong><br>
+                                <span id="tt-dim">L x W</span><br>
+                                <span id="tt-type" class="type-badge">Type</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
